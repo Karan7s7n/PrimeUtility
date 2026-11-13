@@ -1,4 +1,4 @@
-# ToolNest — Digital Tools Platform (V1)
+# PrimeUtility — Digital Tools Platform (V1)
 
 A bilingual (Arabic + English) web platform of ten focused online tools for PDF, images,
 developers and small business. Version 1 is **client-side first**: every tool runs inside the

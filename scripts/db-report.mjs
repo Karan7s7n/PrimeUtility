@@ -1,0 +1,11 @@
+import { Client } from "pg";
+const url = process.env.DATABASE_URL;
+const local = /@(localhost|127\.0\.0\.1)/.test(url) || /sslmode=disable/i.test(url);
+const client = new Client({ connectionString: url, ssl: local ? undefined : { rejectUnauthorized: false } });
+await client.connect();
+const users = await client.query("SELECT email, role, plan, status, created_at FROM users ORDER BY created_at");
+console.log("users:", users.rowCount);
+for (const row of users.rows) console.log(" -", row.email, "|", row.role, "|", row.plan, "|", row.status, "|", row.created_at.toISOString().slice(0, 16));
+const runs = await client.query("SELECT count(*)::int AS n FROM tool_runs");
+console.log("tool_runs:", runs.rows[0].n);
+await client.end();

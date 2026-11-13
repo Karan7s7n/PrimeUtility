@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+.git
+.gitignore
+.attachments
+.env
+.env.mythex
+.DS_Store
+public/pdf.worker.min.mjs
+.next-build

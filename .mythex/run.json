@@ -1,0 +1,15 @@
+{
+  "services": [
+    {
+      "name": "web",
+      "command": "npm run dev",
+      "port": 3000,
+      "web": true,
+      "setup": "npm install --no-audit --no-fund && node scripts/copy-pdf-worker.mjs",
+      "deploy": {
+        "dockerfile": "Dockerfile"
+      }
+    }
+  ],
+  "database": true
+}
