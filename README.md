@@ -1,278 +1,515 @@
-# PrimeUtility — Digital Tools Platform (V1)
+# PrimeUtility — All-in-One Online Tools Platform
 
-A bilingual (Arabic + English) web platform of ten focused online tools for PDF, images,
-developers and small business. Version 1 is **client-side first**: every tool runs inside the
-visitor's browser, so there is nothing to upload, nothing to store and almost nothing to pay
-for in server capacity.
+**Fast, practical, and privacy-focused digital tools for everyday tasks.**
 
-> The name in `lib/site.ts` is a working title. Change it in one place and it changes everywhere.
+PrimeUtility is a web-based platform that brings together useful PDF, image, developer, and small-business tools in one place. Its primary goal is to make common digital tasks simple, accessible, and efficient without requiring users to install software or upload files to a remote processing server.
 
-## What ships in V1
+The platform follows a client-side-first approach: supported tools process files directly inside the visitor's browser. This reduces server workload, improves privacy, and keeps infrastructure requirements manageable.
 
-| Group | Tool | Route |
-| --- | --- | --- |
-| PDF | Compress PDF (safe + strong modes) | `/{locale}/tools/pdf-compressor/` |
-| PDF | Merge PDF | `/{locale}/tools/merge-pdf/` |
-| PDF | PDF to Word (.docx) | `/{locale}/tools/pdf-to-word/` |
-| Image | Image Compressor | `/{locale}/tools/image-compressor/` |
-| Image | Image Converter (JPG/PNG/WebP) | `/{locale}/tools/image-converter/` |
-| Image | QR Code Generator (PNG + SVG) | `/{locale}/tools/qr-code-generator/` |
-| Developer | JSON Formatter / Validator | `/{locale}/tools/json-formatter/` |
-| Developer | JWT Decoder | `/{locale}/tools/jwt-decoder/` |
-| Developer | Regex Tester | `/{locale}/tools/regex-tester/` |
-| Business | Smart Pricing Calculator | `/{locale}/tools/smart-pricing-calculator/` |
+---
 
-Plus: home, all-tools index, four category pages, pricing (Free/Pro/Business, marked as
-planned), four long-form guides, about, contact, privacy, terms and cookies — all in both
-languages, all statically generated.
+## Project Overview
 
-`locale` is `en` or `ar`; `/ar/` renders right-to-left.
+PrimeUtility is built around three principles:
 
-## Accounts, history and limits (V2)
+- **Privacy first:** File processing happens locally in the browser wherever supported. File contents are not stored in the platform's database.
+- **Simple experience:** Focused tools with straightforward interfaces and minimal setup.
+- **Scalable architecture:** A lightweight web application supported by PostgreSQL for accounts, usage tracking, and administration.
 
-A free account is live: register with an email and password, and the platform keeps a record of
-what you ran, how much data it saved you and how much of your daily allowance you have used.
+The application also includes user accounts, usage history, daily allowances, and an administrative dashboard.
 
-- **Auth** — email + password (scrypt hashing), httpOnly session cookie, 30 days.
-- **History** — tool runs with metadata only (tool, input size, output size, duration, time).
-  File contents are never stored: the tools process everything in the browser.
-- **Allowance** — guest 5 runs/day per browser, free account 40/day, Pro 2,000, Business 10,000.
-  Because the tools run locally, the allowance is a soft limit: the tool keeps working, the
-  notice explains the stop and a free account raises it.
-- **Daily allowance** — counted in `usage_daily` (one row per account or browser per day) inside
-  the same transaction that records the run, guarded by a per-scope advisory lock. Two requests
-  arriving together can never both take the last slot, and clearing the history does not hand back
-  a fresh allowance, because the counter is not part of the history rows.
-- **Rate limiting** — fixed windows counted in Postgres (`rate_limits`): sign-in 5 attempts /
-  15 min, registration 10 / hour, password change 5 / 15 min, all per hashed IP. Over the limit
-  the API answers `429` with a `Retry-After` header. A successful sign-in clears its own counter,
-  so a real user is never locked out by their own logins.
-- **Sessions** — changing a password deletes every session of that user and issues a fresh one;
-  expired sessions and rate-limit rows older than two hours are removed by housekeeping that runs
-  at most every 30 minutes (there is no scheduler in this environment).
-- **Account page** — plan and usage, history with delete/clear, profile (name, language) and
-  password change.
+## Features
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| POST | `/api/auth/register` · `/api/auth/login` · `/api/auth/logout` | session |
-| GET | `/api/auth/me` | current user + usage summary |
-| PATCH | `/api/auth/profile` | name, preferred language |
-| POST | `/api/auth/password` | change password |
-| POST | `/api/runs` | record a run (returns remaining allowance, 429 when spent) |
-| GET/DELETE | `/api/history` | list, delete one (`?id=`) or clear all |
-| GET | `/api/usage` | counters per tool, totals, bytes saved |
+### 1. Online Tools
 
-Postgres tables (`users`, `sessions`, `tool_runs`) are created on first use — no migration step
-to run. `DATABASE_URL` is injected by the platform; if it is missing the site still works, with
-accounts disabled and a clear notice.
+PrimeUtility brings together tools across four main categories:
 
-## Admin dashboard (V3)
+| Category | Tools |
+|---|---|
+| PDF | PDF compression, PDF merging, PDF-to-Word conversion |
+| Images | Image compression, image conversion, QR code generation |
+| Developer | JSON formatting and validation, JWT decoding, regex testing |
+| Business | Smart pricing calculator |
 
-`/[locale]/admin/` is the operations view, guarded on the server: the page and every
-`/api/admin/*` route check the stored role, so hiding a button changes nothing.
+Each tool has its own dedicated page, instructions, and supporting SEO content.
 
-- **Roles and plans** — `users.role` is `user`, `admin` or `super_admin`; `users.plan` is
-  `free`, `pro` or `business` and decides the daily allowance (2,000 / 10,000). A plan is not a
-  permission: a Pro account still cannot open the dashboard.
-- **Getting in** — while the deployment has no admin at all, the first signed-in visitor sees a
-  *Make this account the admin* button on `/admin` (one-time, then the seat is taken). Or list
-  addresses in `ADMIN_EMAILS` and they are promoted on sign-in — that also survives a lost admin
-  account.
-- **Overview** — accounts, new and active users (7 days), open sessions, runs today / 7 / 30 days,
-  failures, guest browsers, bytes saved, average duration, most used tools, plan breakdown and
-  the newest signups.
-- **Users** — search by email or name, filter by plan, role and status, paginated, with runs and
-  sessions per account. Actions: change plan, change role (super admin only), suspend / activate,
-  delete (super admin only). Suspension deletes that account's sessions immediately, so it is
-  signed out everywhere on its next request. Guards stop an admin locking themselves out: no
-  suspending or deleting yourself, and the last super admin cannot be demoted.
-- **Tools** — usage per tool plus a switch and an internal note. A switched-off tool disappears
-  from the home page and the tools index (both rendered per request), and its own page keeps its
-  SEO content but shows a pause notice instead of the tool. Tool pages themselves stay static.
-- **Activity** — every recorded run with its account (or an anonymised guest id), sizes, duration
-  and status, filterable by tool and status.
-- **Audit log** — every admin action with the acting account, so changes are attributable.
+### 2. User Accounts and Usage Management
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | `/api/admin/overview` | dashboard counters |
-| GET/POST | `/api/admin/users` | list / act on an account |
-| GET/POST | `/api/admin/tools` | list tools / switch one off or note it |
-| GET | `/api/admin/activity` | recorded runs, filterable, paginated |
-| GET | `/api/admin/audit` | admin action log |
-| GET/POST | `/api/admin/claim` | availability of the first-admin seat / take it |
+Registered users can create an account using an email address and password.
 
-Tables `tool_settings` and `admin_audit` are created with the rest, and `users` gained the
-`plan`, `status` and `last_seen_at` columns on first use.
+Account functionality includes:
 
-## Limits and safety
+- Secure password hashing using scrypt.
+- HTTP-only session cookies.
+- Session expiration after 30 days.
+- Account profile management.
+- Password changes and session rotation.
+- Tool usage history.
+- Daily usage allowance tracking.
+- Usage statistics and data-savings estimates.
 
-Everything that could exhaust the visitor's device or our API is capped, and the user is told
-why rather than having files silently ignored.
+The platform stores tool execution metadata rather than uploaded file contents.
 
-| Where | Limit |
-| --- | --- |
-| API JSON bodies | 1 MB (checked from `Content-Length` and the real byte length) |
+### 3. Usage Allowances
+
+PrimeUtility supports guest usage and account-based plans.
+
+| Account type | Daily allowance |
+|---|---:|
+| Guest | 5 runs |
+| Free | 40 runs |
+| Pro | 2,000 runs |
+| Business | 10,000 runs |
+
+The Pro and Business plans are currently represented in the application and can be assigned through administration. Payment processing and subscription billing are planned for a future release.
+
+Because most tools operate locally, usage allowances primarily govern platform usage tracking rather than acting as a technical restriction on browser-side processing.
+
+### 4. Usage Tracking and History
+
+The application records:
+
+- Tool name.
+- Input and output sizes.
+- Execution duration.
+- Execution timestamp.
+- Success or failure status.
+
+Users can view their usage history, delete individual records, or clear their history.
+
+Daily allowance counters are maintained separately from history records. Clearing history therefore does not reset the daily allowance.
+
+### 5. Administrative Dashboard
+
+The administration area is available at:
+
+`/en/admin/`
+
+Access is protected by server-side role checks. Hiding an interface element does not grant or remove permissions.
+
+**Roles**
+
+- `user`
+- `admin`
+- `super_admin`
+
+**Administrative capabilities**
+
+- View platform statistics.
+- Monitor registered and active users.
+- Review usage activity and failures.
+- Search and filter accounts.
+- Change user plans.
+- Manage account roles.
+- Suspend or reactivate accounts.
+- Delete accounts.
+- Enable or disable individual tools.
+- Add internal notes to tools.
+- Review administrative activity and audit records.
+
+Suspending an account invalidates its existing sessions. Additional safeguards prevent administrators from accidentally suspending or deleting themselves and protect the last super administrator from being demoted.
+
+**Administrator access**
+
+Administrator accounts can be configured through the `ADMIN_EMAILS` environment variable. Whitelisted email addresses are promoted when signing in.
+
+The first-administrator claim mechanism is also protected by an email whitelist and a transactional database lock.
+
+### 6. Database and Backend
+
+PrimeUtility uses PostgreSQL for persistent application data.
+
+The database includes tables for:
+
+- Users.
+- Sessions.
+- Tool execution history.
+- Daily usage counters.
+- Tool settings.
+- Administrative audit records.
+- API rate limits.
+
+The schema is initialized automatically on first database-backed use. No separate manual migration command is required for the current schema.
+
+If the database is not configured, the public tools can still operate, but account-related features remain unavailable.
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15 App Router |
+| Frontend | React 19 |
+| Language | TypeScript |
+| Styling | Tailwind CSS v4 |
+| Database | PostgreSQL |
+| Database client | node-postgres (`pg`) |
+| Authentication | Custom email/password authentication |
+| Password hashing | scrypt |
+| PDF processing | pdf-lib, pdfjs-dist |
+| Word generation | docx |
+| QR generation | qrcode |
+| Image processing | Canvas API, createImageBitmap |
+| Testing | Vitest, Playwright |
+| Deployment packaging | Docker |
+
+### Architecture
+
+PrimeUtility combines statically generated public pages with dynamic server-side API routes.
+
+- Public pages are prerendered for performance and search engine indexing.
+- Interactive tools are loaded on their respective pages.
+- Browser-supported processing happens locally.
+- API routes handle authentication, accounts, history, usage tracking, and administration.
+- PostgreSQL stores persistent application data.
+
+This architecture avoids moving every file-processing task onto a backend server.
+
+---
+
+## Privacy, Security and Resource Limits
+
+PrimeUtility is designed to limit unnecessary data collection and protect both visitors and platform infrastructure.
+
+### File Processing
+
+Files are processed in the browser wherever supported. The application does not store uploaded file contents in its usage-history database.
+
+### Resource Limits
+
+The application applies safeguards to prevent excessively large inputs or expensive operations.
+
+| Area | Limit |
+|---|---|
+| API JSON request bodies | 1 MB |
 | Image tools | 20 files, 25 MB each, 100 MB total |
-| Merge PDF | 20 files, 50 MB each, 100 MB total, 300 pages in total |
-| PDF compressor / PDF to Word | 50 MB, 300 pages |
-| Regex tester | 2,000 characters of pattern, 500,000 characters of text |
-| JSON formatter | 2 MB before anything is parsed |
-| Tool statistics | sizes and durations are validated and clamped server-side |
+| PDF merging | 20 files, 50 MB each, 100 MB total, 300 pages |
+| PDF compression and conversion | 50 MB, 300 pages |
+| Regex pattern | 2,000 characters |
+| Regex test text | 500,000 characters |
+| JSON formatter input | 2 MB |
 
-Reported usage is self-reported by the browser, so it is used for history and statistics only —
-anything billed later must be measured on the server.
+Limits are validated so oversized inputs receive a clear error rather than being silently ignored.
 
-Baseline security headers are sent from `next.config.mjs` (`X-Content-Type-Options`,
-`Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security`, and `X-Frame-Options`,
-which defaults to `SAMEORIGIN` so the app can still be previewed inside a frame — set
-`X_FRAME_OPTIONS=DENY` to change it). A strict CSP is deliberately not set yet: the tools rely on
-blob/data URLs and web fonts. The production container runs as the unprivileged `node` user.
+### API Rate Limiting
 
-## Stack
+PostgreSQL-backed rate limiting protects authentication endpoints:
 
-- **Next.js 15 (App Router) + React 19 + TypeScript**, server-rendered. Tool pages are still
-  prerendered as real HTML (SEO), while `/api` routes handle accounts, history and limits.
-  Published from the included `Dockerfile`.
-- **Tailwind CSS v4** with a small design system in `app/globals.css` (light/dark, RTL-aware).
-- Client-side libraries: `pdf-lib` (merge, rebuild, compose), `pdfjs-dist` (page rendering, text
-  extraction), `docx` (Word output), `qrcode` (PNG/SVG), Canvas & `createImageBitmap` (images).
+- Sign-in: 5 attempts per 15 minutes.
+- Registration: 10 attempts per hour.
+- Password changes: 5 attempts per 15 minutes.
 
-### Why not Laravel + MySQL + Redis yet
+Rate limits are applied using hashed IP identifiers. Requests exceeding the configured limits receive HTTP 429 responses with a `Retry-After` header.
 
-The project document proposes Next.js + Laravel + MySQL + Redis. That backend only earns its
-keep once there are **accounts, saved history, subscriptions, queue jobs and heavy server-side
-PDF/OCR** — none of which exist in V1. Building it now would add cost and risk without adding a
-single usable feature, and it would move file processing onto a server, against the privacy
-principle in the same document. The static-first V1 keeps the platform free to run and easy to
-index; the API service (Dockerfile + Postgres) is the next stage.
+### Security Headers
 
-## Project layout
+The application configures baseline security headers, including:
 
-```
+- X-Content-Type-Options.
+- Referrer-Policy.
+- Permissions-Policy.
+- Strict-Transport-Security.
+- X-Frame-Options.
+
+A restrictive Content Security Policy is not enabled yet because browser-based tools require certain blob URLs, data URLs, and font resources.
+
+The Docker production container runs under the unprivileged `node` user.
+
+**Usage statistics note:** Input sizes, output sizes, and durations reported by the browser are intended for history and analytics. They should not be treated as authoritative billing measurements. Any future usage-based billing must rely on server-verified measurements.
+
+---
+
+## Search Engine Optimization
+
+PrimeUtility uses dedicated public pages and metadata to support search engine discovery.
+
+SEO features include:
+
+- Dedicated pages for individual tools.
+- Unique page titles and descriptions.
+- Structured headings and descriptions.
+- Breadcrumb navigation.
+- JSON-LD structured data.
+- Internal links between related tools and guides.
+- Canonical URLs when the public origin is configured.
+- Sitemap and robots.txt endpoints.
+
+The public website origin is configured through `MYTHEX_WEB_ORIGIN`. It is not hard-coded into the application.
+
+Canonical and alternate-language metadata are generated as part of the static build and therefore require the correct public origin during deployment.
+
+---
+
+## Project Structure
+
+```text
 app/
-  layout.tsx                  root shell: fonts, theme + lang/dir boot script
-  page.tsx                    "/" → picks Arabic or English from the browser
-  not-found.tsx               404
+  layout.tsx
+  page.tsx
+  not-found.tsx
+
   [locale]/
-    layout.tsx                header, footer, dir=rtl|ltr, per-locale metadata
-    page.tsx                  home (hero, search, categories, guides)
-    tools/page.tsx            all tools + instant search and filters
-    tools/[slug]/page.tsx     one tool page (or a category page)
-    pricing | blog | blog/[slug] | about | contact | privacy | terms | cookies
+    layout.tsx
+    page.tsx
+    tools/
+      page.tsx
+      [slug]/
+        page.tsx
+    account/
+    admin/
+    blog/
+    pricing/
+    about/
+    contact/
+    privacy/
+    terms/
+    cookies/
+
+  api/
+    auth/
+    admin/
+    history/
+    runs/
+    tools/
+    usage/
+
 components/
-  Header, Footer, ToolCard, ToolSearch, Breadcrumbs, JsonLd, LegalPage, ThemeToggle, LocaleSwitch
-  tools/                      one component per tool + shared tool UI (FileDrop, Stat, Notice…)
+  Header.tsx
+  Footer.tsx
+  ToolCard.tsx
+  ToolSearch.tsx
+  Breadcrumbs.tsx
+  JsonLd.tsx
+  LegalPage.tsx
+  ThemeToggle.tsx
+  tools/
+
 lib/
-  site.ts        brand, locales, categories
-  i18n.ts        every UI string in both languages
-  tools.ts       tool registry: slugs, categories, SEO copy, how-to, FAQ, examples
-  pages.ts       about / pricing / legal copy, both languages
-  blog.ts        guide articles, both languages
-  meta.ts        metadata + JSON-LD builders
-  images.ts, pdf.ts, urls.ts, utils.ts
+  admin.ts
+  api.ts
+  auth.ts
+  db.ts
+  i18n.ts
+  limits.ts
+  meta.ts
+  plans.ts
+  ratelimit.ts
+  session.ts
+  site.ts
+  tools.ts
+  usage.ts
+  utils.ts
+
 scripts/
-  copy-pdf-worker.mjs   puts the pdf.js worker in public/ before dev/build
-  generate-seo.mjs      writes sitemap.xml + robots.txt into out/ after build
+  copy-pdf-worker.mjs
+  db-report.mjs
+
+tests/
+e2e/
+.github/
+  workflows/
+    ci.yml
+
+Dockerfile
+next.config.mjs
+package.json
 ```
 
-## Adding an eleventh tool
+---
 
-1. Add an entry to `tools` in `lib/tools.ts` (slug, category, icon, gradient, and the copy for
-   both locales: name, tagline, h1, description, SEO title/description, keywords, how-to steps,
-   FAQ, examples).
-2. Write `components/tools/MyTool.tsx` (client component, receives `locale`).
-3. Register it in `components/tools/ToolRunner.tsx` with `dynamic(..., { ssr: false })` so the
-   tool is code-split and only loads on its own page.
-4. Add the slug to the tool list in `scripts/generate-seo.mjs`.
+## Getting Started
 
-Nothing else: routing, breadcrumbs, structured data, related tools, sitemap, hreflang and both
-languages come from the registry.
+### Requirements
 
-## SEO
+- Node.js 24 or a compatible supported Node.js version.
+- npm.
+- PostgreSQL database for account and administration functionality.
 
-- One static HTML page per tool per language; unique title, meta description, keywords, H1/H2s.
-- `hreflang` alternates (en/ar + x-default) and canonical URLs whenever the public origin is
-  known at build time (see below).
-- JSON-LD: `WebSite`, `SoftwareApplication`, `FAQPage`, `BreadcrumbList`, `Article`.
-- Internal linking: category pages, related tools, guides → tools.
-- `sitemap.xml` + `robots.txt` are generated into `out/` by `scripts/generate-seo.mjs`.
-
-The public origin comes from `MYTHEX_WEB_ORIGIN` — no hostname is ever hard-coded. `robots.txt` and
-`sitemap.xml` read it per request, while canonical and hreflang tags are part of the prerendered
-HTML and therefore use the value present at build time (CI sets it). If the variable is absent the
-site still works: `robots.txt` is served without a sitemap line and no canonical/hreflang tags are
-emitted, rather than emitting wrong ones.
-
-`sitemap.xml` uses a real last-modified date per page (blog articles use their own publication
-date, tools and legal pages use the date their section changed — see `contentDates` in
-`lib/site.ts`), so a rebuild never makes unchanged pages look freshly edited.
-
-## Tests
+### 1. Clone the repository
 
 ```bash
-npm test          # unit tests (vitest run)
-npm run test:watch
-
-npm run test:e2e  # end-to-end browser tests (Playwright)
+git clone https://github.com/Karan7s7n/PrimeUtility.git
+cd PrimeUtility
 ```
 
-**Unit tests** (10 files, 84 tests) cover password hashing and verification, schema-before-query
-ordering on registration, duplicate-email and weak-input rejection, sign-in with a wrong and a
-right password, brute-force locking after five failures, session rotation on password change, the
-rate-limit windows and `Retry-After` maths, API body-size handling, the atomic allowance
-(lock → counter → record → commit, and rollback), file/page/regex/JSON limits, registered tool
-integrity in both languages, sitemap last-modified dates, and the URL/formatting helpers.
-
-**End-to-end tests** (Playwright, 56 checks over desktop and a mobile viewport) run the real
-browser flows: every one of the ten tool pages renders its tool, formats/minifies JSON, decodes a
-JWT, tests a regex with named groups, generates a QR code and downloads it, compresses and
-converts an image, merges/compresses PDFs and extracts text to .docx, prices a product in both
-languages, registers and signs in, changes a password and a profile, proves that sixty
-simultaneous runs hand out each allowance slot exactly once, and covers the admin dashboard:
-refusal for ordinary accounts, a plan change that reaches the account's own limits, suspension
-that signs the account out, a tool switched off that leaves the public listings and pauses its
-own page, and the audit trail recording it all. Sample files are generated on the fly
-(`e2e/support/fixtures.ts`), so no binaries are committed.
-
-Point the suite at an already running server with `E2E_BASE_URL`, or let it start one itself
-(`E2E_PORT`, default 3000) — that is what CI does.
-
-## Continuous integration
-
-`.github/workflows/ci.yml` runs on every push and pull request:
-
-1. **verify** — `npm run typecheck`, `npm test`, `npm run build`.
-2. **e2e** — a real PostgreSQL 16 service, a production build, `npx playwright install
-   --with-deps chromium`, then `npm run test:e2e`. Traces, screenshots and the HTML report are
-   uploaded as artifacts when a run fails.
-
-## Local development
+### 2. Install dependencies
 
 ```bash
-npm install          # also copies the pdf.js worker into public/
-npm run dev          # http://localhost:3000
-npm run build        # production build (needs DATABASE_URL for the runtime only)
+npm install
+```
+
+### 3. Configure environment variables
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Configure the following variables:
+
+```env
+DATABASE_URL=your_postgresql_connection_string
+MYTHEX_WEB_ORIGIN=http://localhost:3000
+RATE_LIMIT_SALT=your_random_secret
+ADMIN_EMAILS=your_admin_email@example.com
+```
+
+Use your own PostgreSQL connection string and generate a strong random value for `RATE_LIMIT_SALT`.
+
+Never commit `.env` or publish database credentials and secrets.
+
+### 4. Start the development server
+
+```bash
+npm run dev
+```
+
+Open:
+
+`http://localhost:3000`
+
+### 5. Run TypeScript checks
+
+```bash
 npm run typecheck
-
-# verify a build while the dev server is running, without touching .next/
-NEXT_DIST_DIR=.next-build npm run build
 ```
 
-## Roadmap (from the project document)
+### 6. Run unit tests
 
-- **V1** — 10 tools, bilingual, SEO, legal pages.
-- **V2 (this release)** — accounts, saved history, usage limits, account dashboard, Postgres,
-  Postgres-backed SEO routes (sitemap/robots read the live origin).
-- **V3 (this release)** — admin dashboard: roles and plans, usage overview, account management,
-  tool switches, activity log and audit trail.
-- **V3 next** — Pro/Business billing (Stripe), batch processing, and heavy PDF work (OCR on
-  scans, split/protect/sign) with the first AI tools.
-- **V4** — public API, API keys, teams, usage dashboard.
-- **V5** — mobile apps sharing the same API, integrations, marketplace.
+```bash
+npm test
+```
 
-Deliberately **not** yet: payments and server-side file processing (OCR on scans). The Pro and
-Business plans exist in the data model and can be granted from the dashboard, but nothing charges
-for them until billing lands.
-# PrimeUtility
+### 7. Create a production build
+
+```bash
+npm run build
+```
+
+### 8. Start the production server
+
+```bash
+npm run start
+```
+
+---
+
+## Testing and Continuous Integration
+
+PrimeUtility uses Vitest for unit testing and Playwright for browser-based end-to-end testing.
+
+### Unit tests
+
+```bash
+npm test
+```
+
+The test suite covers:
+
+- Password hashing and verification.
+- Authentication and registration.
+- Duplicate account and invalid input handling.
+- Session management.
+- Rate limiting.
+- API request-size validation.
+- Atomic daily usage allowances.
+- File and input limits.
+- Tool registry integrity.
+- Sitemap dates.
+- Utility functions.
+- Administrative access and protections.
+
+### End-to-end tests
+
+```bash
+npm run test:e2e
+```
+
+Playwright tests exercise real browser workflows, including tool operations, authentication, account management, usage allowances, and administrative actions.
+
+The test environment can use an existing server through `E2E_BASE_URL` or start its own server using the configured E2E port.
+
+### Continuous Integration
+
+The GitHub Actions workflow runs on pushes and pull requests.
+
+It includes:
+
+**Verification**
+- TypeScript checks.
+- Unit tests.
+- Production build.
+
+**End-to-end testing**
+- PostgreSQL service.
+- Production application build.
+- Chromium installation.
+- Playwright browser tests.
+
+Test traces, screenshots, and HTML reports are uploaded as artifacts when an E2E run fails.
+
+---
+
+## Why Client-Side Processing?
+
+A traditional document-processing platform may upload every file to a backend server before performing an operation.
+
+PrimeUtility takes a different approach wherever browser capabilities allow.
+
+Client-side processing provides several advantages:
+
+1. Files do not need to travel to a processing server.
+2. Users retain greater control over their documents.
+3. Server infrastructure requirements are reduced.
+4. Many operations can run without waiting for a backend response.
+5. The platform can support more users without scaling file-processing servers for every request.
+
+PostgreSQL is still used for account management, usage records, and administration, but it is not used to store users' processed files.
+
+---
+
+## Development Roadmap
+
+| Version | Planned or delivered functionality |
+|---|---|
+| V1 | Core online tools, public pages, responsive interface and SEO |
+| V2 | User accounts, usage history, daily allowances and PostgreSQL |
+| V3 | Administrative dashboard, role management, tool controls and audit logs |
+| V3 Next | Subscription billing, batch processing, advanced PDF operations and AI-powered tools |
+| V4 | Public API, API keys, teams and developer usage dashboard |
+| V5 | Mobile applications, integrations and marketplace |
+
+### Future Development
+
+Potential additions include:
+
+- Stripe-powered Pro and Business subscriptions.
+- Advanced PDF operations such as OCR, splitting, protection and signing.
+- Batch-processing workflows.
+- AI-assisted tools.
+- Public API access.
+- Team accounts and integrations.
+
+Payment processing and server-side OCR are not currently part of the live feature set.
+
+---
+
+## Project Status
+
+PrimeUtility currently includes its public tool platform, account system, PostgreSQL-backed usage tracking, and administrative dashboard.
+
+The production build completes successfully with Next.js 15.5.26. The project is being prepared for deployment.
+
+Some planned features, particularly subscription billing and advanced server-side processing, remain under development.
+
+---
+
+## License
+
+All rights reserved. No permission to copy, modify, distribute, or commercially use this project is granted unless explicitly authorized by the copyright holder.
+
+---
+
+**PrimeUtility — Useful tools. Less friction. More control.**
