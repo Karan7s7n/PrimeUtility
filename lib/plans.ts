@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { Locale } from "./site";
 import { one } from "./db";
 

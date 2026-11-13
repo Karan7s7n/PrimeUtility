@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Notice, Stat } from "@/components/tools/ui";
 import { dictionaries } from "@/lib/i18n";
-import { planCopy } from "@/lib/plans";
+import { planCopy } from "@/lib/plan-config";
 import { refreshSession, signOut, useSession } from "@/lib/session";
 import type { Locale } from "@/lib/site";
 import { formatBytes } from "@/lib/utils";

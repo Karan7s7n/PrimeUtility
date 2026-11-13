@@ -16,7 +16,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { Notice, Stat } from "@/components/tools/ui";
 import { dictionaries, type Dictionary } from "@/lib/i18n";
-import { planCopy, type PlanId } from "@/lib/plans";
+import { planCopy, type PlanId } from "@/lib/plan-config";
 import { formatBytes } from "@/lib/utils";
 import type { Locale } from "@/lib/site";
 
