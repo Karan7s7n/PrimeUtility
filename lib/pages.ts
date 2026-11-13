@@ -29,14 +29,14 @@ const enAbout = {
     {
       heading: "What is in this version",
       body: [
-        "Ten tools across four groups — PDF, images, developer utilities and a business pricing calculator — in both Arabic and English, with a layout that starts from the phone.",
+        "Ten tools across four groups — PDF, images, developer utilities and a business pricing calculator — with an English-first, mobile-friendly experience.",
         "Every tool lives on its own page with instructions, examples and answers to the questions we get asked most, so you can judge the result before you trust it with real work.",
       ],
     },
     {
       heading: "How it grows from here",
       body: [
-        "Accounts, saved history, batch processing and higher limits come next, then heavier server-side processing for scanned PDFs and OCR, then API access for teams.",
+        "PrimeUtility now includes secure user accounts, saved tool history, daily usage allowances, PostgreSQL-backed data and an administrative dashboard. Future development will focus on batch processing, advanced PDF and OCR capabilities, and API access for teams.",
         "We would rather ship ten tools that behave properly than fifty that half-work. New tools are added when the usage numbers say people want them.",
       ],
     },
@@ -76,7 +76,7 @@ const arAbout = {
 const enPricing = {
   title: "Plans and pricing",
   intro:
-    "Every tool is free and runs in your browser, with or without an account. A free account is live today: it keeps your history, raises the daily allowance from 5 to 40 runs and works on every device. The paid plans below are the next stage.",
+    "PrimeUtility offers free browser-based tools with or without an account. A free account provides saved history, cross-device access and a daily allowance of 40 runs instead of 5 guest runs. Pro and Business plans are planned but are not available for purchase yet.",
   notChargedNote:
     "Free accounts are available now — no card, no payment. The Pro and Business plans cannot be purchased yet: billing arrives with the next release.",
   plans: [
@@ -90,7 +90,7 @@ const enPricing = {
         "5 runs a day as a guest",
         "40 runs a day with a free account",
         "Your own history, on every device",
-        "Arabic and English",
+        "Saved history and cross-device access",
         "No card required",
       ],
       cta: "Start using the tools",

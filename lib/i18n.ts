@@ -17,7 +17,7 @@ const en = {
     admin: "Admin",
   },
   home: {
-    badge: "No sign-up · Runs in your browser · Free",
+    badge: "Free tools · Privacy-focused · Ready to use",
     title: "Fast online tools for PDF, images, developers and business",
     subtitle:
       "Ten sharp, single-purpose tools. They open instantly, they work on your phone, and most of them never send your file anywhere.",
@@ -27,9 +27,9 @@ const en = {
     ctaBrowse: "Browse all tools",
     ctaPricing: "See plans",
     stats: [
-      { value: "10", label: "Tools in v1" },
-      { value: "0", label: "Files uploaded by our dev tools" },
-      { value: "2", label: "Languages: Arabic & English" },
+      { value: "10", label: "Online tools" },
+      { value: "0", label: "Uploads by browser-based tools" },
+      { value: "100%", label: "Mobile friendly" },
       { value: "100%", label: "Mobile friendly" },
     ],
     popularTitle: "Popular tools",
@@ -44,7 +44,7 @@ const en = {
       "No installs, no waiting rooms, no account walls for the basic use. Open a page, do the job, download the result.",
     proTitle: "Built to grow into a platform",
     proText:
-      "V1 ships the ten tools and keeps everything client-side. Accounts, saved history, batch processing, API access and heavier server-side PDF/OCR work are the next stage — the pricing page shows where it is heading.",
+      "PrimeUtility combines browser-based tools with secure accounts, saved usage history, daily allowances and an administration dashboard. We are continuing to expand the platform with advanced processing, batch operations and API access.",
     proFeature1: "Larger files",
     proFeature2: "Batch processing",
     proFeature3: "Saved history",
@@ -52,7 +52,7 @@ const en = {
   },
   toolsIndex: {
     title: "All tools",
-    subtitle: "Ten focused tools, one page each. Free to use, no account needed.",
+    subtitle: "Ten focused tools, one page each. Free to use, with no account required for basic tool access.",
     countLabel: "tools",
   },
   card: {
