@@ -1,4 +1,5 @@
 import type { Locale } from "./site";
+import { one } from "./db";
 
 export type PlanId = "guest" | "free" | "pro" | "business";
 
@@ -67,3 +68,35 @@ export const planForUser = (user: { role: string; plan?: string } | null): PlanI
 };
 
 export const planCopy = (plan: PlanId, locale: Locale) => plans[plan].name[locale];
+
+/**
+ * Resolves the effective plan using server-side subscription state.
+ * Explicit admin assignments always take priority over paid subscriptions.
+ */
+export async function effectivePlanForUser(
+  user: { id: number; role: string; plan?: string } | null,
+): Promise<PlanId> {
+  if (!user) return "guest";
+
+  const override = await one<{ admin_plan_override: boolean }>(
+    "SELECT admin_plan_override FROM users WHERE id = $1",
+    [user.id],
+  );
+
+  if (override?.admin_plan_override) {
+    return planForUser(user);
+  }
+
+  const subscription = await one<{ plan: "pro" | "business" }>(
+    `SELECT plan
+       FROM subscriptions
+      WHERE user_id = $1
+        AND status = 'active'
+        AND current_end > now()
+      ORDER BY current_end DESC, created_at DESC
+      LIMIT 1`,
+    [user.id],
+  );
+
+  return subscription?.plan ?? planForUser(user);
+}

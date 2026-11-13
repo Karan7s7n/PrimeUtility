@@ -76,10 +76,20 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+
 -- Added after the first release, so they are migrations rather than columns in CREATE TABLE.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS admin_plan_override BOOLEAN NOT NULL DEFAULT false;
+
+-- Preserve existing manually assigned Pro/Business accounts.
+UPDATE users
+   SET admin_plan_override = true
+ WHERE plan IN ('pro', 'business')
+    OR role IN ('pro', 'business');
 
 CREATE TABLE IF NOT EXISTS sessions (
   id BIGSERIAL PRIMARY KEY,
@@ -143,7 +153,63 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   PRIMARY KEY (rule, key_hash, window_start)
 );
 CREATE INDEX IF NOT EXISTS rate_limits_window_idx ON rate_limits (window_start);
-`;
+
+
+-- Customer subscriptions managed through Razorpay.
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL CHECK (plan IN ('pro', 'business')),
+  razorpay_subscription_id TEXT NOT NULL UNIQUE,
+  razorpay_plan_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'created',
+  current_start TIMESTAMPTZ,
+  current_end TIMESTAMPTZ,
+  charge_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
+  cancel_at_cycle_end BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE subscriptions
+  ADD COLUMN IF NOT EXISTS last_event_created_at BIGINT;
+
+CREATE INDEX IF NOT EXISTS subscriptions_user_idx
+  ON subscriptions (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS subscriptions_status_end_idx
+  ON subscriptions (status, current_end);
+
+-- Verified payment records; amounts are stored in paise.
+CREATE TABLE IF NOT EXISTS payments (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subscription_id BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
+  razorpay_payment_id TEXT NOT NULL UNIQUE,
+  razorpay_invoice_id TEXT,
+  amount BIGINT NOT NULL CHECK (amount >= 0),
+  currency TEXT NOT NULL DEFAULT 'INR',
+  status TEXT NOT NULL,
+  method TEXT,
+  captured_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS payments_user_idx
+  ON payments (user_id, created_at DESC);
+
+-- Unique event IDs make webhook processing idempotent.
+CREATE TABLE IF NOT EXISTS razorpay_webhook_events (
+  id BIGSERIAL PRIMARY KEY,
+  event_id TEXT NOT NULL UNIQUE,
+  event_type TEXT NOT NULL,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS razorpay_webhook_events_created_idx
+  ON razorpay_webhook_events (processed_at DESC);
+  `;
+
 
 let schemaReady: Promise<void> | null = null;
 

@@ -346,7 +346,10 @@ export async function applyUserAction(
   );
 
   if (input.action === "set_plan") {
-    await query("UPDATE users SET plan = $2 WHERE id = $1", [targetId, input.plan]);
+    await query(
+  "UPDATE users SET plan = $2, admin_plan_override = true WHERE id = $1",
+  [targetId, input.plan],
+);
     await recordAdminAction(actor, "user.set_plan", target.email, { plan: input.plan });
     return { ok: true };
   }

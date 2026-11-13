@@ -1,5 +1,5 @@
 import { cleanNumber, json, jsonReadError, readJson, resolveScope } from "@/lib/api";
-import { plans, planForUser } from "@/lib/plans";
+import { plans, effectivePlanForUser } from "@/lib/plans";
 import { toolSlugs } from "@/lib/tools";
 import { reserveRun } from "@/lib/usage";
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "unknown_tool" }, 400);
   }
 
-  const plan = planForUser(scope.user);
+  const plan = await effectivePlanForUser(scope.user);
   const limit = plans[plan].dailyLimit;
 
   // Sizes and durations are self-reported by the browser: they are validated and

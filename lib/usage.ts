@@ -1,5 +1,5 @@
 import { one, query, withClient } from "./db";
-import { plans, planForUser, type PlanId } from "./plans";
+import { plans, effectivePlanForUser, type PlanId } from "./plans";
 import type { PublicUser } from "./auth";
 
 export interface UsageScope {
@@ -26,7 +26,7 @@ const scopeClause = (scope: UsageScope) =>
   scope.userId ? { where: "user_id = $1", params: [scope.userId] as unknown[] } : { where: "guest_id = $1", params: [scope.guestId ?? ""] as unknown[] };
 
 export async function usageSummary(scope: UsageScope, user: PublicUser | null): Promise<UsageSummary> {
-  const plan = planForUser(user);
+  const plan = await effectivePlanForUser(user);
   const { where, params } = scopeClause(scope);
 
   const [today, totals, byTool] = await Promise.all([
