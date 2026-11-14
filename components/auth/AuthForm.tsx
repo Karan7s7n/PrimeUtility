@@ -40,8 +40,29 @@ export function AuthForm({ mode, locale }: { mode: "login" | "register"; locale:
         return;
       }
       await refreshSession();
-      router.push(href(locale, "account"));
-      router.refresh();
+
+      const requestedNext = new URLSearchParams(window.location.search).get("next");
+
+let destination = href(locale, "account");
+
+if (requestedNext) {
+  try {
+    const nextUrl = new URL(requestedNext, window.location.origin);
+
+    if (
+      nextUrl.origin === window.location.origin &&
+      requestedNext.startsWith("/") &&
+      !requestedNext.startsWith("//")
+    ) {
+      destination = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+    }
+  } catch {
+    // Keep the default account destination.
+  }
+}
+
+router.push(destination);
+router.refresh();
     } catch {
       setError(labels.errors.generic);
     } finally {

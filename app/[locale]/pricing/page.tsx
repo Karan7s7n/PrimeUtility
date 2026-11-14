@@ -2,6 +2,7 @@ import { CheckCircle2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
+import { PricingPlanAction } from "@/components/billing/PricingPlanAction";
 import { pricingCopy } from "@/lib/pages";
 import { isLocale, site, type Locale } from "@/lib/site";
 import { dictionaries } from "@/lib/i18n";
@@ -77,13 +78,17 @@ export default async function PricingPage({ params }: { params: Promise<{ locale
                 </li>
               ))}
             </ul>
-            {plan.available ? (
+            {plan.name === "Free" || plan.name === "المجانية" ? (
               <Link href={href(typed, "tools")} className="btn-primary mt-6">
                 <Sparkles className="size-4" />
                 {plan.cta}
               </Link>
             ) : (
-              <span className="btn-secondary mt-6 cursor-not-allowed opacity-70">{plan.cta}</span>
+              <PricingPlanAction
+                locale={typed}
+                plan={plan.name === "Pro" || plan.name === "برو" ? "pro" : "business"}
+                cta={plan.cta}
+              />
             )}
           </div>
         ))}

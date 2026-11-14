@@ -4,7 +4,7 @@ import {
   jsonReadError,
   resolveScope,
 } from "@/lib/api";
-import { one, query } from "@/lib/db";
+import { withClient } from "@/lib/db";
 import {
   BILLING_PLANS,
   getRazorpay,
@@ -18,14 +18,21 @@ interface CreateSubscriptionBody {
   plan?: string;
 }
 
+interface ExistingSubscription {
+  plan: BillingPlanId;
+  razorpay_subscription_id: string;
+  status: string;
+}
+
 export async function POST(request: Request) {
   try {
-    // Require an authenticated account.
     const scope = await resolveScope();
 
     if (!scope?.user) {
       return json({ error: "unauthorized" }, 401);
     }
+
+    const userId = scope.user.id;
 
     const body = await readJson<CreateSubscriptionBody>(request);
 
@@ -42,75 +49,115 @@ export async function POST(request: Request) {
     const planId: BillingPlanId = requestedPlan;
     const plan = BILLING_PLANS[planId];
 
-    // Avoid creating duplicate subscriptions for the same account.
-    const existing = await one<{ id: number }>(
-      `SELECT id
-         FROM subscriptions
-        WHERE user_id = $1
-          AND (
-            (
-              status IN ('active', 'pending', 'halted')
-              AND current_end > now()
-            )
-            OR (
-              status IN ('created', 'authenticated')
-              AND created_at > now() - interval '30 minutes'
-            )
-          )
-        LIMIT 1`,
-      [scope.user.id],
-    );
+    return await withClient(async (client) => {
+      const lockKey = `primeutility-billing:${userId}`;
 
-    if (existing) {
-      return json(
-        { error: "existing_subscription", message: "An existing subscription is already being processed or is active." },
-        409,
+      await client.query(
+        "SELECT pg_advisory_lock(hashtextextended($1, 0))",
+        [lockKey],
       );
-    }
 
-    const { keyId, client } = getRazorpay();
+      try {
+        const existing = await client.query<ExistingSubscription>(
+          `SELECT plan, razorpay_subscription_id, status
+             FROM subscriptions
+            WHERE user_id = $1
+              AND (
+                (
+                  status IN ('active', 'pending', 'halted')
+                  AND (current_end IS NULL OR current_end > now())
+                )
+                OR (
+                  status IN ('created', 'authenticated')
+                  AND created_at > now() - interval '30 minutes'
+                )
+              )
+            ORDER BY created_at DESC
+            LIMIT 1`,
+          [userId],
+        );
 
-    // Price and Plan ID always come from server configuration.
-    const subscription = await client.subscriptions.create({
-      plan_id: plan.razorpayPlanId,
-      total_count: 120,
-      customer_notify: 1,
-      notes: {
-        user_id: String(scope.user.id),
-        plan: planId,
-        product: "PrimeUtility",
-      },
-    });
+        const current = existing.rows[0];
 
-    // Save the subscription before returning its ID to the browser.
-    await query(
-      `INSERT INTO subscriptions (
-         user_id,
-         plan,
-         razorpay_subscription_id,
-         razorpay_plan_id,
-         status
-       )
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        scope.user.id,
-        planId,
-        subscription.id,
-        plan.razorpayPlanId,
-        subscription.status,
-      ],
-    );
+        if (current) {
+          // Reuse a recently created subscription for the same plan.
+          if (
+            current.status === "created" &&
+            current.plan === planId
+          ) {
+            const { keyId } = getRazorpay();
 
-    return json({
-      keyId,
-      subscriptionId: subscription.id,
-      plan: {
-        id: planId,
-        name: plan.name,
-        amount: plan.amount,
-        currency: plan.currency,
-        billingCycles: 120,
-      },
+            return json({
+              keyId,
+              subscriptionId: current.razorpay_subscription_id,
+              plan: {
+                id: planId,
+                name: plan.name,
+                amount: plan.amount,
+                currency: plan.currency,
+                billingCycles: 120,
+              },
+            });
+          }
+
+          return json(
+            {
+              error: "existing_subscription",
+              message:
+                "An existing subscription is already being processed or is active.",
+            },
+            409,
+          );
+        }
+
+        const { keyId, client: razorpay } = getRazorpay();
+
+        const subscription = await razorpay.subscriptions.create({
+          plan_id: plan.razorpayPlanId,
+          total_count: 120,
+          customer_notify: 1,
+          notes: {
+            user_id: String(userId),
+            plan: planId,
+            product: "PrimeUtility",
+          },
+        });
+
+        await client.query(
+          `INSERT INTO subscriptions (
+             user_id,
+             plan,
+             razorpay_subscription_id,
+             razorpay_plan_id,
+             status
+           )
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            userId,
+            planId,
+            subscription.id,
+            plan.razorpayPlanId,
+            subscription.status,
+          ],
+        );
+
+        return json({
+          keyId,
+          subscriptionId: subscription.id,
+          plan: {
+            id: planId,
+            name: plan.name,
+            amount: plan.amount,
+            currency: plan.currency,
+            billingCycles: 120,
+          },
+        });
+      } finally {
+        await client.query(
+          "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+          [lockKey],
+        );
+      }
     });
   } catch (error) {
     console.error("Subscription creation failed:", error);

@@ -76,9 +76,9 @@ const arAbout = {
 const enPricing = {
   title: "Plans and pricing",
   intro:
-    "PrimeUtility offers free browser-based tools with or without an account. A free account provides saved history, cross-device access and a daily allowance of 40 runs instead of 5 guest runs. Pro and Business plans are planned but are not available for purchase yet.",
+    "PrimeUtility offers free browser-based tools alongside paid plans for heavier workloads. A free account provides saved history, cross-device access and 40 daily runs. Choose Pro or Business for higher limits and advanced processing.",
   notChargedNote:
-    "Free accounts are available now — no card, no payment. The Pro and Business plans cannot be purchased yet: billing arrives with the next release.",
+    "Pro is ₹299/month and Business is ₹999/month. Paid subscriptions are currently running in Razorpay Test Mode; no real payment will be collected.",
   plans: [
     {
       name: "Free",
@@ -98,8 +98,8 @@ const enPricing = {
     },
     {
       name: "Pro",
-      price: "$7",
-      period: "per month (planned)",
+      price: "₹299",
+      period: "per month",
       tagline: "For people who use these tools weekly.",
       features: [
         "Everything in Free",
@@ -109,13 +109,13 @@ const enPricing = {
         "Server-side OCR and heavy PDF work",
         "Priority processing",
       ],
-      cta: "Coming soon",
-      available: false,
+      cta: "Subscribe to Pro",
+      available: true,
     },
     {
       name: "Business",
-      price: "$24",
-      period: "per month (planned)",
+      price: "₹999",
+      period: "per month",
       tagline: "For teams, stores and API access.",
       features: [
         "Everything in Pro",
@@ -125,8 +125,8 @@ const enPricing = {
         "Bulk processing and exports",
         "Email support",
       ],
-      cta: "Coming soon",
-      available: false,
+      cta: "Subscribe to Business",
+      available: true,
     },
   ],
   faqTitle: "Billing questions",
@@ -141,7 +141,7 @@ const enPricing = {
     },
     {
       q: "Will prices change?",
-      a: "The figures above are placeholders for planning. Final prices are set before launch of the paid plans and existing users are told in advance.",
+      a: "Pro costs ₹299/month and Business costs ₹999/month. Payments are currently processed in Razorpay Test Mode.",
     },
   ],
 };
@@ -149,9 +149,9 @@ const enPricing = {
 const arPricing = {
   title: "الخطط والأسعار",
   intro:
-    "كل الأدوات مجانية وتعمل داخل متصفحك، بحساب أو بدونه. والحساب المجاني متاح الآن: يحفظ سجلك، ويرفع الرصيد اليومي من 5 إلى 40 عملية، ويعمل على كل الأجهزة. والخطط المدفوعة أدناه هي المرحلة القادمة.",
+    "كل الأدوات مجانية وتعمل داخل متصفحك، بحساب أو بدونه. والحساب المجاني متاح الآن: يحفظ سجلك، ويرفع الرصيد اليومي من 5 إلى 40 عملية، ويعمل على كل الأجهزة. وتوفر خطتا برو والأعمال حدودًا أعلى ومعالجة متقدمة.",
   notChargedNote:
-    "الحسابات المجانية متاحة الآن — بدون بطاقة وبدون دفع. أما خطتا برو والأعمال فلا يمكن شراؤهما بعد: نظام الدفع يأتي مع الإصدار القادم.",
+    "سعر برو 299 روبية شهريًا، وسعر الأعمال 999 روبية شهريًا. تعمل الاشتراكات المدفوعة حاليًا في وضع الاختبار لدى Razorpay، ولن يتم تحصيل أموال حقيقية.",
   plans: [
     {
       name: "المجانية",
@@ -171,8 +171,8 @@ const arPricing = {
     },
     {
       name: "برو",
-      price: "7$",
-      period: "شهريًا (مقترح)",
+      price: "₹299",
+      period: "شهريًا",
       tagline: "لمن يستخدم هذه الأدوات أسبوعيًا.",
       features: [
         "كل مزايا الخطة المجانية",
@@ -182,13 +182,13 @@ const arPricing = {
         "OCR ومعالجة PDF الثقيلة على الخادم",
         "أولوية في المعالجة",
       ],
-      cta: "قريبًا",
-      available: false,
+      cta: "اشترك في برو",
+      available: true,
     },
     {
       name: "الأعمال",
-      price: "24$",
-      period: "شهريًا (مقترح)",
+      price: "₹999",
+      period: "شهريًا",
       tagline: "للفرق والمتاجر والوصول عبر API.",
       features: [
         "كل مزايا خطة برو",
@@ -198,8 +198,8 @@ const arPricing = {
         "معالجة بالجملة والتصدير",
         "دعم بالبريد الإلكتروني",
       ],
-      cta: "قريبًا",
-      available: false,
+      cta: "اشترك في الأعمال",
+      available: true,
     },
   ],
   faqTitle: "أسئلة عن الفواتير",
@@ -214,7 +214,7 @@ const arPricing = {
     },
     {
       q: "هل تتغير الأسعار؟",
-      a: "الأرقام أعلاه مبدئية للتخطيط. تُحدد الأسعار النهائية قبل إطلاق الخطط المدفوعة، ويُبلَّغ المستخدمون الحاليون مسبقًا.",
+      a: "سعر برو 299 روبية شهريًا، وسعر الأعمال 999 روبية شهريًا. تتم معالجة المدفوعات حاليًا في وضع الاختبار لدى Razorpay.",
     },
   ],
 };
