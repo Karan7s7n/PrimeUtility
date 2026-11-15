@@ -42,14 +42,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"></link>
-        <meta name="theme-color" content="#4f46e5" />
-        <script dangerouslySetInnerHTML={{ __html: bootScript }} />
-      </head>
+  <script
+    async
+    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7158758704794259"
+    crossOrigin="anonymous"
+  />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossOrigin="anonymous"
+  />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+  />
+  <meta name="theme-color" content="#4f46e5" />
+  <script dangerouslySetInnerHTML={{ __html: bootScript }} />
+</head>
       <body>
         <div className="page-glow" aria-hidden="true" />
         {children}
