@@ -78,7 +78,7 @@ const enPricing = {
   intro:
     "PrimeUtility offers free browser-based tools alongside paid plans for heavier workloads. A free account provides saved history, cross-device access and 40 daily runs. Choose Pro or Business for higher limits and advanced processing.",
   notChargedNote:
-    "Pro is ₹299/month and Business is ₹999/month. Paid subscriptions are currently running in Razorpay Test Mode; no real payment will be collected.",
+    "Pro is ₹299 for 30 days and Business is ₹999 for 30 days. Each recharge is a one-time payment with no automatic renewal. Payments are currently in Razorpay Test Mode; no real money will be collected.",
   plans: [
     {
       name: "Free",
@@ -99,7 +99,7 @@ const enPricing = {
     {
       name: "Pro",
       price: "₹299",
-      period: "per month",
+      period: "30 days",
       tagline: "For people who use these tools weekly.",
       features: [
         "Everything in Free",
@@ -115,7 +115,7 @@ const enPricing = {
     {
       name: "Business",
       price: "₹999",
-      period: "per month",
+      period: "30 days",
       tagline: "For teams, stores and API access.",
       features: [
         "Everything in Pro",
@@ -141,7 +141,7 @@ const enPricing = {
     },
     {
       q: "Will prices change?",
-      a: "Pro costs ₹299/month and Business costs ₹999/month. Payments are currently processed in Razorpay Test Mode.",
+      a: "Pro costs ₹299 for 30 days and Business costs ₹999 for 30 days. Each purchase is a one-time recharge with no automatic renewal. Payments are currently processed in Razorpay Test Mode.",
     },
   ],
 };
@@ -151,7 +151,7 @@ const arPricing = {
   intro:
     "كل الأدوات مجانية وتعمل داخل متصفحك، بحساب أو بدونه. والحساب المجاني متاح الآن: يحفظ سجلك، ويرفع الرصيد اليومي من 5 إلى 40 عملية، ويعمل على كل الأجهزة. وتوفر خطتا برو والأعمال حدودًا أعلى ومعالجة متقدمة.",
   notChargedNote:
-    "سعر برو 299 روبية شهريًا، وسعر الأعمال 999 روبية شهريًا. تعمل الاشتراكات المدفوعة حاليًا في وضع الاختبار لدى Razorpay، ولن يتم تحصيل أموال حقيقية.",
+    "سعر برو 299 روبية لمدة 30 يومًا، وسعر الأعمال 999 روبية لمدة 30 يومًا. كل عملية شحن هي دفعة واحدة دون تجديد تلقائي. تتم المدفوعات حاليًا في وضع الاختبار لدى Razorpay، ولن يتم تحصيل أموال حقيقية.",
   plans: [
     {
       name: "المجانية",
@@ -172,7 +172,7 @@ const arPricing = {
     {
       name: "برو",
       price: "₹299",
-      period: "شهريًا",
+      period: "30 يومًا",
       tagline: "لمن يستخدم هذه الأدوات أسبوعيًا.",
       features: [
         "كل مزايا الخطة المجانية",
@@ -188,7 +188,7 @@ const arPricing = {
     {
       name: "الأعمال",
       price: "₹999",
-      period: "شهريًا",
+      period: "30 يومًا",
       tagline: "للفرق والمتاجر والوصول عبر API.",
       features: [
         "كل مزايا خطة برو",
@@ -214,7 +214,7 @@ const arPricing = {
     },
     {
       q: "هل تتغير الأسعار؟",
-      a: "سعر برو 299 روبية شهريًا، وسعر الأعمال 999 روبية شهريًا. تتم معالجة المدفوعات حاليًا في وضع الاختبار لدى Razorpay.",
+      a: "سعر برو 299 روبية لمدة 30 يومًا، وسعر الأعمال 999 روبية لمدة 30 يومًا. كل عملية شحن هي دفعة واحدة دون تجديد تلقائي. تتم معالجة المدفوعات حاليًا في وضع الاختبار لدى Razorpay.",
     },
   ],
 };

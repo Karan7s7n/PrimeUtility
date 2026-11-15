@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { activateBillingOrder } from "@/lib/billing";
 import { withClient } from "@/lib/db";
+import { readBodyLimited } from "@/lib/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,17 +82,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "missing_or_invalid_webhook_headers" }, { status: 400 });
   }
 
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  const bodyResult = await readBodyLimited(request, 1024 * 1024);
 
-  if (contentLength > 1024 * 1024) {
-    return Response.json({ error: "payload_too_large" }, { status: 413 });
+  if (!bodyResult.ok) {
+    return Response.json(
+      { error: bodyResult.error === "payload_too_large" ? "payload_too_large" : "invalid_payload" },
+      { status: bodyResult.error === "payload_too_large" ? 413 : 400 },
+    );
   }
 
-  const rawBody = await request.text();
-
-  if (Buffer.byteLength(rawBody, "utf8") > 1024 * 1024) {
-    return Response.json({ error: "payload_too_large" }, { status: 413 });
-  }
+  const rawBody = bodyResult.text;
 
   if (!verifySignature(rawBody, signature, secret)) {
     return Response.json({ error: "invalid_signature" }, { status: 401 });
@@ -294,6 +295,47 @@ export async function POST(request: Request) {
               numberOrNull(payment.created_at),
             ],
           );
+        }
+
+        // Activate one-time recharge orders only for locally recorded orders.
+        // Subscription payments without a matching billing order are ignored here.
+        if (eventType === "payment.captured" && payment) {
+          const razorpayOrderId = stringOrNull(payment.order_id);
+
+          if (razorpayOrderId) {
+            const billingOrder = await client.query<{ razorpay_order_id: string }>(
+              `SELECT razorpay_order_id
+                 FROM billing_orders
+                WHERE razorpay_order_id = $1
+                LIMIT 1`,
+              [razorpayOrderId],
+            );
+
+            if (billingOrder.rows[0]) {
+              const paymentId = stringOrNull(payment.id);
+              const amount = numberOrNull(payment.amount);
+              const currency = stringOrNull(payment.currency);
+
+              if (!paymentId || amount === null || !currency) {
+                throw new Error("Captured recharge payment contains invalid details");
+              }
+
+              if (stringOrNull(payment.status) !== "captured") {
+                throw new Error("Recharge payment.captured event has an invalid status");
+              }
+
+              await activateBillingOrder(client, {
+                orderId: razorpayOrderId,
+                paymentId,
+                amount,
+                currency,
+                method: stringOrNull(payment.method),
+                capturedAt: numberOrNull(payment.created_at)
+                  ? new Date(numberOrNull(payment.created_at)! * 1000)
+                  : new Date(),
+              });
+            }
+          }
         }
 
         // Record failed subscription payment attempts without changing

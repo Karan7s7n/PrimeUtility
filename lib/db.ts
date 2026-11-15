@@ -76,7 +76,6 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-
 -- Added after the first release, so they are migrations rather than columns in CREATE TABLE.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
@@ -84,12 +83,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS admin_plan_override BOOLEAN NOT NULL DEFAULT false;
-
--- Preserve existing manually assigned Pro/Business accounts.
-UPDATE users
-   SET admin_plan_override = true
- WHERE plan IN ('pro', 'business')
-    OR role IN ('pro', 'business');
 
 CREATE TABLE IF NOT EXISTS sessions (
   id BIGSERIAL PRIMARY KEY,
@@ -144,6 +137,29 @@ CREATE TABLE IF NOT EXISTS admin_audit (
 );
 CREATE INDEX IF NOT EXISTS admin_audit_created_idx ON admin_audit (created_at DESC);
 
+-- Reconstruct explicit admin plan overrides from the latest recorded admin action.
+-- This also corrects legacy paid accounts previously marked as permanent overrides.
+WITH latest_plan_actions AS (
+  SELECT DISTINCT ON (LOWER(target))
+         LOWER(target) AS email,
+         metadata->>'plan' AS plan
+    FROM admin_audit
+   WHERE action = 'user.set_plan'
+     AND target IS NOT NULL
+   ORDER BY LOWER(target), created_at DESC, id DESC
+),
+desired_overrides AS (
+  SELECT u.id,
+         COALESCE(l.plan IN ('pro', 'business'), false) AS should_override
+    FROM users u
+    LEFT JOIN latest_plan_actions l ON l.email = LOWER(u.email)
+)
+UPDATE users u
+   SET admin_plan_override = d.should_override
+  FROM desired_overrides d
+ WHERE u.id = d.id
+   AND u.admin_plan_override IS DISTINCT FROM d.should_override;
+
 CREATE TABLE IF NOT EXISTS rate_limits (
   rule TEXT NOT NULL,
   key_hash TEXT NOT NULL,
@@ -153,7 +169,6 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   PRIMARY KEY (rule, key_hash, window_start)
 );
 CREATE INDEX IF NOT EXISTS rate_limits_window_idx ON rate_limits (window_start);
-
 
 -- Customer subscriptions managed through Razorpay.
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -180,11 +195,37 @@ CREATE INDEX IF NOT EXISTS subscriptions_user_idx
 CREATE INDEX IF NOT EXISTS subscriptions_status_end_idx
   ON subscriptions (status, current_end);
 
+-- One-time Razorpay recharges. Create this before payments because payments
+-- references billing_orders through a foreign key. Historical subscriptions remain untouched.
+CREATE TABLE IF NOT EXISTS billing_orders (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL CHECK (plan IN ('pro', 'business')),
+  razorpay_order_id TEXT NOT NULL UNIQUE,
+  amount BIGINT NOT NULL CHECK (amount > 0),
+  currency TEXT NOT NULL DEFAULT 'INR',
+  status TEXT NOT NULL DEFAULT 'created'
+    CHECK (status IN ('created', 'paid', 'failed')),
+  paid_at TIMESTAMPTZ,
+  access_starts_at TIMESTAMPTZ,
+  access_expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS billing_orders_user_expiry_idx
+  ON billing_orders (user_id, access_expires_at DESC)
+  WHERE status = 'paid';
+
+CREATE INDEX IF NOT EXISTS billing_orders_user_created_idx
+  ON billing_orders (user_id, created_at DESC);
+
 -- Verified payment records; amounts are stored in paise.
 CREATE TABLE IF NOT EXISTS payments (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   subscription_id BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
+  billing_order_id BIGINT REFERENCES billing_orders(id) ON DELETE SET NULL,
   razorpay_payment_id TEXT NOT NULL UNIQUE,
   razorpay_invoice_id TEXT,
   amount BIGINT NOT NULL CHECK (amount >= 0),
@@ -198,6 +239,16 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS payments_user_idx
   ON payments (user_id, created_at DESC);
 
+-- Existing databases already have payments, so CREATE TABLE IF NOT EXISTS
+-- alone would not add the new billing_order_id column.
+ALTER TABLE payments
+  ADD COLUMN IF NOT EXISTS billing_order_id BIGINT
+  REFERENCES billing_orders(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS payments_billing_order_idx
+  ON payments (billing_order_id)
+  WHERE billing_order_id IS NOT NULL;
+
 -- Unique event IDs make webhook processing idempotent.
 CREATE TABLE IF NOT EXISTS razorpay_webhook_events (
   id BIGSERIAL PRIMARY KEY,
@@ -208,8 +259,7 @@ CREATE TABLE IF NOT EXISTS razorpay_webhook_events (
 
 CREATE INDEX IF NOT EXISTS razorpay_webhook_events_created_idx
   ON razorpay_webhook_events (processed_at DESC);
-  `;
-
+`;
 
 let schemaReady: Promise<void> | null = null;
 

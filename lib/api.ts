@@ -38,22 +38,79 @@ export type ReadJsonResult<T> =
  * Reads a JSON body with a hard size limit, checked both from Content-Length
  * and from the real byte length, before anything is parsed.
  */
-export async function readJson<T>(request: Request, maxBytes: number = MAX_JSON_BYTES): Promise<ReadJsonResult<T>> {
-  const declared = Number(request.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, error: "payload_too_large" };
+export type ReadBodyResult =
+  | { ok: true; text: string }
+  | { ok: false; error: "invalid_body" | "payload_too_large" };
 
-  let text: string;
+/**
+ * Reads a request stream without buffering more than the configured limit.
+ */
+export async function readBodyLimited(
+  request: Request,
+  maxBytes: number = MAX_JSON_BYTES,
+): Promise<ReadBodyResult> {
+  const contentLength = request.headers.get("content-length");
+
+  if (contentLength !== null) {
+    const declared = Number(contentLength);
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      return { ok: false, error: "payload_too_large" };
+    }
+  }
+
+  if (!request.body) return { ok: false, error: "invalid_body" };
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
   try {
-    text = await request.text();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return { ok: false, error: "payload_too_large" };
+      }
+
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, error: "invalid_body" };
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return { ok: true, text: new TextDecoder().decode(bytes) };
   } catch {
     return { ok: false, error: "invalid_body" };
   }
+}
 
-  if (new TextEncoder().encode(text).byteLength > maxBytes) return { ok: false, error: "payload_too_large" };
-  if (!text.trim()) return { ok: false, error: "invalid_body" };
+export async function readJson<T>(
+  request: Request,
+  maxBytes: number = MAX_JSON_BYTES,
+): Promise<ReadJsonResult<T>> {
+  const body = await readBodyLimited(request, maxBytes);
+
+  if (!body.ok) return body;
+  if (!body.text.trim()) return { ok: false, error: "invalid_body" };
 
   try {
-    return { ok: true, data: JSON.parse(text) as T };
+    return { ok: true, data: JSON.parse(body.text) as T };
   } catch {
     return { ok: false, error: "invalid_body" };
   }

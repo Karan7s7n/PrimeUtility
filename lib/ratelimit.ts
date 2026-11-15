@@ -16,6 +16,8 @@ export const RATE_LIMITS = {
   login: { rule: "auth:login", limit: 5, windowSeconds: 15 * 60 },
   register: { rule: "auth:register", limit: 10, windowSeconds: 60 * 60 },
   password: { rule: "auth:password", limit: 5, windowSeconds: 15 * 60 },
+  billingOrder: { rule: "billing:order", limit: 5, windowSeconds: 60 * 60 },
+  billingVerify: { rule: "billing:verify", limit: 10, windowSeconds: 5 * 60 },
 } satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that contains `at`. */
@@ -99,6 +101,38 @@ export async function enforceRateLimit(
       status: 429,
       headers: {
         "Retry-After": String(result.retryAfter),
+        "X-RateLimit-Limit": String(rule.limit),
+        "X-RateLimit-Remaining": "0",
+      },
+    },
+  );
+}
+
+/**
+ * Limits a signed-in user's requests by both IP and account.
+ * Both identifiers are hashed before being stored.
+ */
+export async function enforceUserRateLimit(
+  rule: RateLimitRule,
+  request: Request,
+  userId: number,
+): Promise<NextResponse | null> {
+  const [ipResult, accountResult] = await Promise.all([
+    consumeRateLimit(rule, clientKey(request)),
+    consumeRateLimit(rule, hashKey(`user:${userId}`)),
+  ]);
+
+  const blocked = [ipResult, accountResult].filter((result) => !result.allowed);
+  if (blocked.length === 0) return null;
+
+  const retryAfter = Math.max(...blocked.map((result) => result.retryAfter));
+
+  return NextResponse.json(
+    { error: "rate_limited", retryAfter },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": String(retryAfter),
         "X-RateLimit-Limit": String(rule.limit),
         "X-RateLimit-Remaining": "0",
       },

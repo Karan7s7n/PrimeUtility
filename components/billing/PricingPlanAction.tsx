@@ -11,25 +11,27 @@ type PaidPlan = "pro" | "business";
 
 interface CheckoutResponse {
   keyId: string;
-  subscriptionId: string;
+  orderId: string;
   plan: {
     id: PaidPlan;
     name: string;
     amount: number;
     currency: string;
-    billingCycles: number;
+    durationDays: number;
   };
 }
 
 interface RazorpayCheckoutResult {
   razorpay_payment_id: string;
-  razorpay_subscription_id: string;
+  razorpay_order_id: string;
   razorpay_signature: string;
 }
 
 interface RazorpayOptions {
   key: string;
-  subscription_id: string;
+  order_id: string;
+  amount: number;
+  currency: string;
   name: string;
   description: string;
   prefill?: {
@@ -96,90 +98,112 @@ export function PricingPlanAction({
     setBusy(true);
 
     try {
-      const response = await fetch("/api/billing/subscriptions/", {
+      const response = await fetch("/api/billing/orders/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ plan }),
       });
 
-      const data = (await response.json()) as CheckoutResponse & {
+      const data = (await response.json()) as Partial<CheckoutResponse> & {
         error?: string;
       };
 
       if (!response.ok) {
-        if (data.error === "existing_subscription") {
-          setMessage(
-            isArabic
-              ? "يوجد اشتراك قيد المعالجة أو اشتراك نشط بالفعل. تحقق من حسابك."
-              : "An active or pending subscription already exists. Please check your account.",
+        if (data.error === "unauthorized") {
+          const next = `${href(locale, "pricing")}?plan=${plan}`;
+          window.location.assign(
+            `${href(locale, "login")}?next=${encodeURIComponent(next)}`,
           );
-        } else if (data.error === "unauthorized") {
-  const next = `${href(locale, "pricing")}?plan=${plan}`;
-  window.location.assign(
-    `${href(locale, "login")}?next=${encodeURIComponent(next)}`,
-  );
-} else {
-          throw new Error(data.error ?? "subscription_creation_failed");
+          setBusy(false);
+          return;
         }
 
-        setMessageType("error");
-        setBusy(false);
-        return;
+        throw new Error(data.error ?? "billing_order_creation_failed");
       }
+
+      if (
+        !data.keyId ||
+        !data.orderId ||
+        !data.plan ||
+        data.plan.id !== plan ||
+        !data.plan.amount ||
+        !data.plan.currency
+      ) {
+        throw new Error("invalid_checkout_response");
+      }
+
+      const checkoutPlan = data.plan;
 
       const checkout = new window.Razorpay({
         key: data.keyId,
-        subscription_id: data.subscriptionId,
+        order_id: data.orderId,
+        amount: data.plan.amount,
+        currency: data.plan.currency,
         name: "PrimeUtility",
-        description: `${data.plan.name} monthly subscription`,
+        description: `${data.plan.name} — 30-day recharge`,
         prefill: {
           name: user.name,
           email: user.email,
         },
         theme: { color: "#b51c00" },
-        handler: async () => {
+        handler: async (paymentResult) => {
           setMessage(
             isArabic
-              ? "تم إرسال تأكيد الدفع. ننتظر تأكيد الاشتراك من بوابة الدفع."
-              : "Payment authorization received. Waiting for subscription confirmation.",
+              ? "جارٍ التحقق من الدفع وتفعيل الرصيد..."
+              : "Verifying payment and activating your recharge...",
           );
           setMessageType("info");
 
           try {
-            for (let attempt = 0; attempt < 8; attempt++) {
-              const updated = await refreshSession();
+            const verification = await fetch("/api/billing/verify/", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(paymentResult),
+            });
 
-              if (updated.usage?.plan === plan) {
-                setMessage(
-                  isArabic
-                    ? "تم تفعيل اشتراكك بنجاح."
-                    : `${data.plan.name} is now active on your account.`,
-                );
-                setBusy(false);
-                return;
-              }
+            const verificationData = (await verification.json()) as {
+              success?: boolean;
+              plan?: PaidPlan;
+              error?: string;
+            };
 
-              if (attempt < 7) {
-                await new Promise((resolve) => setTimeout(resolve, 1500));
-              }
+            if (!verification.ok || !verificationData.success) {
+              throw new Error(
+                verificationData.error ?? "payment_verification_failed",
+              );
             }
-          } catch {
-            // The webhook remains authoritative; the account can be refreshed later.
-          }
 
-          setMessage(
-            isArabic
-              ? "تم استلام الدفع. قد يستغرق تفعيل الاشتراك بعض الوقت. تحقق من حسابك لاحقًا."
-              : "Payment authorization was received. Activation may take a little longer. Please check your account shortly.",
-          );
-          setBusy(false);
+            // The server has already activated the recharge.
+            // Refresh the client session so the new plan appears immediately.
+            try {
+              await refreshSession();
+            } catch {
+              // The verified activation is saved; the user can refresh later.
+            }
+
+            setMessage(
+              isArabic
+                ? "تم تأكيد الدفع وتفعيل باقتك بنجاح لمدة 30 يومًا."
+                : `${checkoutPlan.name} recharge successful! Your plan is active for 30 days.`,
+            );
+            setMessageType("info");
+          } catch {
+            setMessage(
+              isArabic
+                ? "تعذر تأكيد الدفع تلقائيًا. لا تحاول الدفع مرة أخرى الآن؛ تحقق من حسابك أو تواصل مع الدعم."
+                : "We couldn't verify the payment automatically. Please don't pay again yet. Check your account or contact support.",
+            );
+            setMessageType("error");
+          } finally {
+            setBusy(false);
+          }
         },
         modal: {
           ondismiss: () => {
             setMessage(
               isArabic
-                ? "أُغلقت نافذة الدفع. لم يتم تأكيد تفعيل الاشتراك."
-                : "Checkout was closed. Subscription activation has not been confirmed.",
+                ? "أُغلقت نافذة الدفع. لم يتم تأكيد إعادة الشحن."
+                : "Checkout was closed. Payment has not been confirmed.",
             );
             setMessageType("info");
             setBusy(false);
@@ -191,8 +215,8 @@ export function PricingPlanAction({
     } catch {
       setMessage(
         isArabic
-          ? "تعذر بدء الاشتراك. حاول مرة أخرى."
-          : "Could not start the subscription. Please try again.",
+          ? "تعذر بدء عملية الدفع. حاول مرة أخرى."
+          : "Could not start checkout. Please try again.",
       );
       setMessageType("error");
       setBusy(false);
@@ -231,6 +255,7 @@ export function PricingPlanAction({
           {isArabic ? "تعذر تحميل بوابة الدفع." : "Could not load the payment gateway."}
         </p>
       )}
+
       {message && (
         <p
           role="status"

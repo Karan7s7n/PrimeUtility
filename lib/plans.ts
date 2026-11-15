@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Locale } from "./site";
-import { one } from "./db";
+import { ensureSchema, one } from "./db";
 
 export type PlanId = "guest" | "free" | "pro" | "business";
 
@@ -72,13 +72,16 @@ export const planForUser = (user: { role: string; plan?: string } | null): PlanI
 export const planCopy = (plan: PlanId, locale: Locale) => plans[plan].name[locale];
 
 /**
- * Resolves the effective plan using server-side subscription state.
- * Explicit admin assignments always take priority over paid subscriptions.
+ * Resolves the effective plan using server-side billing state.
+ * Explicit admin assignments always take priority.
+ * Legacy subscriptions and one-time recharges are both supported.
  */
 export async function effectivePlanForUser(
   user: { id: number; role: string; plan?: string } | null,
 ): Promise<PlanId> {
   if (!user) return "guest";
+
+  await ensureSchema();
 
   const override = await one<{ admin_plan_override: boolean }>(
     "SELECT admin_plan_override FROM users WHERE id = $1",
@@ -89,16 +92,28 @@ export async function effectivePlanForUser(
     return planForUser(user);
   }
 
-  const subscription = await one<{ plan: "pro" | "business" }>(
+  const paidAccess = await one<{ plan: "pro" | "business" }>(
     `SELECT plan
-       FROM subscriptions
-      WHERE user_id = $1
-        AND status = 'active'
-        AND current_end > now()
-      ORDER BY current_end DESC, created_at DESC
+       FROM (
+         SELECT plan, current_end AS expires_at, created_at
+           FROM subscriptions
+          WHERE user_id = $1
+            AND status = 'active'
+            AND current_end > now()
+
+         UNION ALL
+
+         SELECT plan, access_expires_at AS expires_at, created_at
+           FROM billing_orders
+          WHERE user_id = $1
+  AND status = 'paid'
+  AND access_starts_at <= now()
+  AND access_expires_at > now()
+       ) AS active_paid_access
+      ORDER BY expires_at DESC, created_at DESC
       LIMIT 1`,
     [user.id],
   );
 
-  return subscription?.plan ?? planForUser(user);
+  return paidAccess?.plan ?? "free";
 }

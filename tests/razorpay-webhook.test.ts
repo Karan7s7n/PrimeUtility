@@ -4,11 +4,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   withClient: vi.fn(),
+  activateBillingOrder: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
   withClient: (fn: (client: { query: typeof mocks.query }) => Promise<unknown>) =>
     mocks.withClient(fn),
+}));
+
+vi.mock("@/lib/billing", () => ({
+  activateBillingOrder: (...args: unknown[]) =>
+    mocks.activateBillingOrder(...args),
 }));
 
 const WEBHOOK_SECRET = "test-webhook-secret";
@@ -67,6 +73,7 @@ beforeEach(() => {
 
   mocks.query.mockReset();
   mocks.withClient.mockReset();
+  mocks.activateBillingOrder.mockReset();
 
   mocks.query.mockImplementation(async (sql: string) => {
     if (sql.includes("INSERT INTO razorpay_webhook_events")) {
@@ -177,6 +184,96 @@ describe("POST /api/webhooks/razorpay", () => {
         String(sql).includes("ROLLBACK"),
       ),
     ).toBe(false);
+  });
+
+
+  it("activates a locally recorded one-time recharge on payment.captured", async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes("INSERT INTO razorpay_webhook_events")) {
+        return { rows: [{ id: "1" }] };
+      }
+
+      if (sql.includes("FROM billing_orders")) {
+        return { rows: [{ razorpay_order_id: "order_recharge_123" }] };
+      }
+
+      return { rows: [] };
+    });
+
+    const { POST } = await import("@/app/api/webhooks/razorpay/route");
+
+    const response = await POST(
+      createWebhookRequest(
+        "evt_recharge_captured",
+        {
+          payment: {
+            entity: {
+              id: "pay_recharge_123",
+              order_id: "order_recharge_123",
+              amount: 29900,
+              currency: "INR",
+              status: "captured",
+              method: "upi",
+              created_at: 1794000000,
+            },
+          },
+        },
+        { event: "payment.captured" },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true });
+
+    expect(mocks.activateBillingOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_recharge_123",
+        paymentId: "pay_recharge_123",
+        amount: 29900,
+        currency: "INR",
+        method: "upi",
+        capturedAt: new Date(1794000000 * 1000),
+      },
+    );
+
+    expect(mocks.query).toHaveBeenCalledWith("COMMIT");
+    expect(mocks.query).not.toHaveBeenCalledWith("ROLLBACK");
+  });
+
+  it("does not activate a captured payment without a local billing order", async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes("INSERT INTO razorpay_webhook_events")) {
+        return { rows: [{ id: "1" }] };
+      }
+
+      return { rows: [] };
+    });
+
+    const { POST } = await import("@/app/api/webhooks/razorpay/route");
+
+    const response = await POST(
+      createWebhookRequest(
+        "evt_unmatched_captured",
+        {
+          payment: {
+            entity: {
+              id: "pay_unmatched_123",
+              order_id: "order_unmatched_123",
+              amount: 29900,
+              currency: "INR",
+              status: "captured",
+            },
+          },
+        },
+        { event: "payment.captured" },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true });
+    expect(mocks.activateBillingOrder).not.toHaveBeenCalled();
+    expect(mocks.query).toHaveBeenCalledWith("COMMIT");
   });
 
   it("rolls back an event referencing an unknown subscription", async () => {

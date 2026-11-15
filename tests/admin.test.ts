@@ -20,7 +20,7 @@ const clientQuery = vi.fn(async (text: string) => {
     return { rows: [{ id: "1", email: "someone@example.com" }] };
   }
   if (text.startsWith("UPDATE users")) {
-    log.push("CLAIM");
+    log.push(text.includes("admin_plan_override") ? "UPDATE_USER" : "CLAIM");
     return { rows: claimSucceeds ? [{ id: "1" }] : [] };
   }
   if (text.includes("admin_audit")) log.push("AUDIT");
@@ -117,7 +117,7 @@ describe("user actions", () => {
   it("changes a plan and writes an audit entry", async () => {
     const result = await applyUserAction(actor, 9, { action: "set_plan", plan: "pro" });
     expect(result).toEqual({ ok: true });
-    expect(log).toEqual(["UPDATE_USER", "AUDIT"]);
+    expect(log).toEqual(["BEGIN", "UPDATE_USER", "AUDIT", "COMMIT"]);
   });
 
   it("never lets an admin suspend or delete their own account", async () => {

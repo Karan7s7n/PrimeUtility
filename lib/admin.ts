@@ -345,14 +345,39 @@ export async function applyUserAction(
     (await one<{ count: string }>("SELECT count(*)::text AS count FROM users WHERE role = 'super_admin'"))?.count ?? 0,
   );
 
+
   if (input.action === "set_plan") {
-    await query(
-  "UPDATE users SET plan = $2, admin_plan_override = true WHERE id = $1",
-  [targetId, input.plan],
-);
-    await recordAdminAction(actor, "user.set_plan", target.email, { plan: input.plan });
+    await withClient(async (client) => {
+      await client.query("BEGIN");
+
+      try {
+        await client.query(
+          "UPDATE users SET plan = $2, admin_plan_override = true WHERE id = $1",
+          [targetId, input.plan],
+        );
+
+        await client.query(
+          `INSERT INTO admin_audit (actor_id, actor_email, action, target, metadata)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            actor.id,
+            actor.email,
+            "user.set_plan",
+            target.email,
+            JSON.stringify({ plan: input.plan }),
+          ],
+        );
+
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    });
+
     return { ok: true };
   }
+
 
   if (input.action === "set_role") {
     if (!isSuperAdminRole(actor.role)) return { ok: false, error: "super_admin_required" };
